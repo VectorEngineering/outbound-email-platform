@@ -84,7 +84,7 @@ export function ThreadDemo({ messages, isMobile }: ThreadDisplayProps) {
             </div>
           </ScrollArea>
           <div className="relative flex-shrink-0 md:top-1">
-            <ReplyCompose mode={mail.forwardComposerOpen ? 'forward' : 'reply'} />
+            <ReplyCompose />
           </div>
         </div>
       </div>
@@ -142,6 +142,7 @@ export function ThreadDisplay({ isMobile, id }: ThreadDisplayProps) {
   const { mutate: mutateStats } = useStats();
   const { folder } = useParams<{ folder: string }>();
   const [threadId, setThreadId] = useQueryState('threadId');
+  const [mode, setMode] = useQueryState('mode');
 
   // Check if thread contains any images (excluding sender avatars)
   const hasImages = useMemo(() => {
@@ -166,23 +167,18 @@ export function ThreadDisplay({ isMobile, id }: ThreadDisplayProps) {
   useEffect(() => {
     if (!emailData || !id) return;
     const unreadEmails = emailData.messages.filter((e) => e.unread);
-    if (unreadEmails.length === 0) {
-      console.log('Marking email as read:', id);
-      markAsRead({ ids: [id] })
-        .catch((error) => {
-          console.error('Failed to mark email as read:', error);
-          toast.error(t('common.mail.failedToMarkAsRead'));
-        })
-        .then(() => Promise.all([mutateThread(), mutateStats()]));
-    } else {
-      console.log('Marking email as read:', id, ...unreadEmails.map((e) => e.id));
+    console.log({
+      totalReplies: emailData.totalReplies,
+      unreadEmails: unreadEmails.length,
+    });
+    if (unreadEmails.length > 0) {
       const ids = [id, ...unreadEmails.map((e) => e.id)];
       markAsRead({ ids })
         .catch((error) => {
           console.error('Failed to mark email as read:', error);
           toast.error(t('common.mail.failedToMarkAsRead'));
         })
-        .then(() => Promise.all([mutateThread(), mutateStats()]));
+        .then(() => Promise.allSettled([mutateThread(), mutateStats()]));
     }
   }, [emailData, id]);
 
@@ -191,7 +187,8 @@ export function ThreadDisplay({ isMobile, id }: ThreadDisplayProps) {
   const isInBin = folder === FOLDERS.BIN;
   const handleClose = useCallback(() => {
     setThreadId(null);
-  }, []);
+    setMode(null);
+  }, [setThreadId, setMode]);
 
   const moveThreadTo = useCallback(
     async (destination: ThreadDestination) => {
@@ -230,7 +227,7 @@ export function ThreadDisplay({ isMobile, id }: ThreadDisplayProps) {
       if (!result.success) throw new Error('Failed to mark as unread');
 
       setMail((prev) => ({ ...prev, bulkSelected: [] }));
-      await Promise.all([mutateStats(), mutateThread()]);
+      await Promise.allSettled([mutateStats(), mutateThread()]);
       handleClose();
     };
 
@@ -373,14 +370,9 @@ export function ThreadDisplay({ isMobile, id }: ThreadDisplayProps) {
               icon={Reply}
               label={t('common.threadDisplay.reply')}
               disabled={!emailData}
-              className={cn(mail.replyComposerOpen && 'bg-primary/10')}
+              className={cn(mode === 'reply' && 'bg-primary/10')}
               onClick={() => {
-                setMail((prev) => ({
-                  ...prev,
-                  replyComposerOpen: true,
-                  replyAllComposerOpen: false,
-                  forwardComposerOpen: false,
-                }));
+                setMode('reply');
               }}
             />
             {hasMultipleParticipants && (
@@ -388,14 +380,9 @@ export function ThreadDisplay({ isMobile, id }: ThreadDisplayProps) {
                 icon={ReplyAll}
                 label={t('common.threadDisplay.replyAll')}
                 disabled={!emailData}
-                className={cn(mail.replyAllComposerOpen && 'bg-primary/10')}
+                className={cn(mode === 'replyAll' && 'bg-primary/10')}
                 onClick={() => {
-                  setMail((prev) => ({
-                    ...prev,
-                    replyComposerOpen: false,
-                    replyAllComposerOpen: true,
-                    forwardComposerOpen: false,
-                  }));
+                  setMode('replyAll');
                 }}
               />
             )}
@@ -403,14 +390,9 @@ export function ThreadDisplay({ isMobile, id }: ThreadDisplayProps) {
               icon={Forward}
               label={t('common.threadDisplay.forward')}
               disabled={!emailData}
-              className={cn(mail.forwardComposerOpen && 'bg-primary/10')}
+              className={cn(mode === 'forward' && 'bg-primary/10')}
               onClick={() => {
-                setMail((prev) => ({
-                  ...prev,
-                  replyComposerOpen: false,
-                  replyAllComposerOpen: false,
-                  forwardComposerOpen: true,
-                }));
+                setMode('forward');
               }}
             />
           </div>
@@ -453,15 +435,7 @@ export function ThreadDisplay({ isMobile, id }: ThreadDisplayProps) {
             </div>
           </ScrollArea>
           <div className={cn('relative z-10 mt-3', isFullscreen ? 'mb-2' : '')}>
-            <ReplyCompose
-              mode={
-                mail.forwardComposerOpen
-                  ? 'forward'
-                  : mail.replyAllComposerOpen
-                    ? 'replyAll'
-                    : 'reply'
-              }
-            />
+            <ReplyCompose />
           </div>
         </div>
       </div>
